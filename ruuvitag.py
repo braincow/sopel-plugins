@@ -44,9 +44,11 @@ def invoke_endpoint(url, id_token):
 
 
 def format_output(name, data):
-    return "At '{}' it is currently: {}C".format(
+    return "Conditions at '{}' are: {}C, {}hPa, {}% rel. humidity".format(
             name,
-            data["temperature"]
+            round(data["temperature"], 1),
+            round(data["atmospheric_pressure"], 1),
+            round(data["humidity"], 1)
             )
 
 
