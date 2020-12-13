@@ -23,7 +23,8 @@ def configure(config):
     config.define_section('ruuvitag', RuuvitagSection, validate=False)
     config.ruuvitag.configure_setting(
             'sa_json',
-            'Where is the GCP service account key file located at (aka filename)?')
+            ('Where is the GCP service account key file '
+                'located at (aka filename)?'))
     config.ruuvitag.configure_setting(
             'endpoint',
             'What is the GCP cloud function endpoint URL to call?')
@@ -36,7 +37,8 @@ def invoke_endpoint(url, id_token):
 
     if r.status_code != 200:
         raise RuuvitagError(
-                "Calling API endpoint failed with HTTP status code: {}".format(r.status_code))
+                ("Calling API endpoint failed with "
+                    "HTTP status code: {}").format(r.status_code))
 
     return r.content.decode('utf-8')
 
@@ -51,7 +53,9 @@ def format_output(name, data):
 @module.commands('ruuvitag')
 @module.rate(user=60, channel=60, server=1)
 def ruuvitag(bot, trigger):
-    """Displays last recorded Bluetooth beacon value (if available) for a requested Ruuvi tag or if not specified for all known ones."""
+    """Displays last recorded Bluetooth beacon value
+    (if available) for a requested Ruuvi tag or if not
+    specified for all known ones."""
     credentials = IDTokenCredentials.from_service_account_file(
         bot.config.ruuvitag.sa_json,
         target_audience=bot.config.ruuvitag.endpoint)
