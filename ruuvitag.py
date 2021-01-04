@@ -75,7 +75,7 @@ def ruuvitag(bot, trigger):
         bot.say("No latest tag information available.")
         return
 
-    if trigger.group(2) is not None:
+    if trigger.group(2) is not None and trigger.group(2) != "":
         if trigger.group(2) not in tags:
             bot.say("I dont know conditions at '{}'.".format(trigger.group(2)))
             return
