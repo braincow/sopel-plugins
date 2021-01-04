@@ -44,12 +44,15 @@ def invoke_endpoint(url, id_token):
 
 
 def format_output(name, data):
+    if data is None:
+        return "No condition data for '{}' available.".format(name)
+
     return "Conditions at '{}' are: {}C, {}hPa, {}% rel. humidity".format(
-            name,
-            round(data["temperature"], 1),
-            round(data["atmospheric_pressure"], 1),
-            round(data["humidity"], 1)
-            )
+        name,
+        round(data["temperature"], 1),
+        round(data["atmospheric_pressure"], 1),
+        round(data["humidity"], 1)
+        )
 
 
 @module.commands('ruuvitag')
