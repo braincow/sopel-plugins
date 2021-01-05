@@ -4,6 +4,7 @@ import json
 import requests
 import google.auth.transport.requests
 from google.oauth2.service_account import IDTokenCredentials
+import re
 
 
 class RuuvitagError(Exception):
@@ -89,17 +90,24 @@ def ruuvitags(bot, trigger):
 @module.rate(user=60, channel=60, server=1)
 def ruuvitag(bot, trigger):
     """Displays last recorded Bluetooth beacon value
-    (if available) for a requested Ruuvi tag or if not
-    specified for all known ones."""
-    tags = fetch_tags(bot.config)
+    (if available) for a requested Ruuvi tag"""
 
     if trigger.group(2) is not None and trigger.group(2) != "":
-        if trigger.group(2) not in tags:
-            bot.say("I dont know conditions at '{}'.".format(trigger.group(2)))
-            return
-        bot.say(format_tag_output(trigger.group(2), tags[trigger.group(2)]))
+        tags = fetch_tags(bot.config)
+
+        exp = re.compile(trigger.group(2))
+        matched = list(filter(exp.match, list(tags.keys())))
+        if len(matched) == 0:
+            bot.say(
+                ("I dont know Ruuvi tag '{}'. "
+                    "Maybe try .ruuvitags to list known tags.").format(
+                        trigger.group(2)))
+        else:
+            for match in matched:
+                bot.say(format_tag_output(match, tags[match]))
     else:
-        for name, data in tags.items():
-            bot.say(format_tag_output(name, data))
+        bot.say(
+            ("Which Ruuvi tag are you interested at? "
+                "Maybe try .ruuvitags first to list known tags."))
 
 # eof
