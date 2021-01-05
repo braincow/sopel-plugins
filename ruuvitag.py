@@ -77,7 +77,7 @@ def fetch_tags(config):
 
 
 @module.commands('ruuvitags')
-@module.rate(user=60, channel=60, server=1)
+@module.rate(user=60, channel=10, server=1)
 def ruuvitags(bot, trigger):
     """Lists all known Ruuvi tags"""
     tags = fetch_tags(bot.config)
@@ -87,7 +87,7 @@ def ruuvitags(bot, trigger):
 
 
 @module.commands('ruuvitag')
-@module.rate(user=60, channel=60, server=1)
+@module.rate(user=60, channel=10, server=1)
 def ruuvitag(bot, trigger):
     """Displays last recorded Bluetooth beacon value
     (if available) for a requested Ruuvi tag"""
