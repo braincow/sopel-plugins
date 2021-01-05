@@ -43,7 +43,7 @@ def invoke_endpoint(url, id_token):
     return r.content.decode('utf-8')
 
 
-def format_output(name, data):
+def format_tag_output(name, data):
     if data is None:
         return "No condition data for '{}' available.".format(name)
 
@@ -55,34 +55,51 @@ def format_output(name, data):
         )
 
 
-@module.commands('ruuvitag')
-@module.rate(user=60, channel=60, server=1)
-def ruuvitag(bot, trigger):
-    """Displays last recorded Bluetooth beacon value
-    (if available) for a requested Ruuvi tag or if not
-    specified for all known ones."""
+def fetch_tags(config):
     credentials = IDTokenCredentials.from_service_account_file(
-        bot.config.ruuvitag.sa_json,
-        target_audience=bot.config.ruuvitag.endpoint)
+        config.ruuvitag.sa_json,
+        target_audience=config.ruuvitag.endpoint)
 
     request = google.auth.transport.requests.Request()
     credentials.refresh(request)
 
-    response = invoke_endpoint(bot.config.ruuvitag.endpoint, credentials.token)
+    response = invoke_endpoint(config.ruuvitag.endpoint, credentials.token)
 
     tags = dict()
     for tag in json.loads(response):
         tags[tag["name"]] = tag["data"]
 
     if len(tags) == 0:
-        bot.say("No latest tag information available.")
-        return
+        raise RuuvitagError("No latest Ruuvi tag information available.")
+
+    return tags
+
+
+@module.commands('ruuvitags')
+@module.rate(user=60, channel=60, server=1)
+def ruuvitags(bot, trigger):
+    """Lists all known Ruuvi tags"""
+    tags = fetch_tags(bot.config)
+    names = tags.keys()
+    names.sort()
+    bot.say("I know tags: '{}'".format("', '".join(names)))
+
+
+@module.commands('ruuvitag')
+@module.rate(user=60, channel=60, server=1)
+def ruuvitag(bot, trigger):
+    """Displays last recorded Bluetooth beacon value
+    (if available) for a requested Ruuvi tag or if not
+    specified for all known ones."""
+    tags = fetch_tags(bot.config)
 
     if trigger.group(2) is not None and trigger.group(2) != "":
         if trigger.group(2) not in tags:
             bot.say("I dont know conditions at '{}'.".format(trigger.group(2)))
             return
-        bot.say(format_output(trigger.group(2), tags[trigger.group(2)]))
+        bot.say(format_tag_output(trigger.group(2), tags[trigger.group(2)]))
     else:
         for name, data in tags.items():
-            bot.say(format_output(name, data))
+            bot.say(format_tag_output(name, data))
+
+# eof
