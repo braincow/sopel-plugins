@@ -1,4 +1,4 @@
-from sopel import module
+from sopel import module, formatting
 from sopel.config.types import StaticSection, ValidatedAttribute
 import json
 import requests
@@ -13,7 +13,9 @@ class RuuvitagError(Exception):
 
 class RuuvitagSection(StaticSection):
     sa_json = ValidatedAttribute('sa_json', str)
-    endpoint = ValidatedAttribute('endpoint', str)
+    latest_endpoint = ValidatedAttribute('latest_endpoint', str)
+    trend_endpoint = ValidatedAttribute('trend_endpoint', str)
+    trend_interval = ValidatedAttribute('trend_interval', int)
 
 
 def setup(bot):
@@ -27,8 +29,17 @@ def configure(config):
             ('Where is the GCP service account key file '
                 'located at (aka filename)?'))
     config.ruuvitag.configure_setting(
-            'endpoint',
-            'What is the GCP cloud function endpoint URL to call?')
+            'latest_endpoint',
+            ('What is the GCP cloud function endpoint '
+                'URL to call for latest data?'))
+    config.ruuvitag.configure_setting(
+            'trend_endpoint',
+            ('What is the GCP cloud function endpoint '
+                'URL to call for trend data?'))
+    config.ruuvitag.configure_setting(
+            'trend_interval',
+            ('What is the trend lookup interval in '
+                '(positive) minutes?'))
 
 
 def invoke_endpoint(url, id_token):
@@ -44,31 +55,73 @@ def invoke_endpoint(url, id_token):
     return r.content.decode('utf-8')
 
 
+def format_trend_output(slope):
+    if slope == 0:
+        return formatting.color("-", formatting.colors.GREEN)
+    elif slope > 0:
+        return formatting.color("^", formatting.colors.RED)
+    elif slope < 0:
+        return formatting.color("v", formatting.colors.BLUE)
+
+
 def format_tag_output(name, data):
     if data is None:
         return "No condition data for '{}' available.".format(name)
 
-    return "Conditions at '{}' are: {}C, {}hPa, {}% rel. humidity".format(
+    return ("Conditions at '{}' are: {} {}C, {} {}hPa, "
+            "{} {}% rel. humidity").format(
         name,
-        round(data["temperature"], 1),
-        round(data["atmospheric_pressure"], 1),
-        round(data["humidity"], 1)
+        format_trend_output(data["trend"]["temperature"]),
+        round(data["latest"]["temperature"], 1),
+        format_trend_output(data["trend"]["atmospheric_pressure"]),
+        round(data["latest"]["atmospheric_pressure"], 1),
+        format_trend_output(data["trend"]["humidity"]),
+        round(data["latest"]["humidity"], 1)
         )
 
 
-def fetch_tags(config):
+def credentials_for_service(config, url):
     credentials = IDTokenCredentials.from_service_account_file(
         config.ruuvitag.sa_json,
-        target_audience=config.ruuvitag.endpoint)
+        target_audience=url)
 
     request = google.auth.transport.requests.Request()
     credentials.refresh(request)
 
-    response = invoke_endpoint(config.ruuvitag.endpoint, credentials.token)
+    return credentials
+
+
+def fetch_tags(config):
+    latest_credentials = credentials_for_service(
+            config,
+            config.ruuvitag.latest_endpoint)
+    trend_credentials = credentials_for_service(
+            config,
+            config.ruuvitag.trend_endpoint)
+
+    response = invoke_endpoint(
+            config.ruuvitag.latest_endpoint,
+            latest_credentials.token)
 
     tags = dict()
     for tag in json.loads(response):
-        tags[tag["name"]] = tag["data"]
+        tags[tag["name"]] = dict()
+        # store latest data
+        tags[tag["name"]]["latest"] = tag["data"]
+        # fetch the trend data for each of the variables we are interested in
+        fields = ['temperature', 'atmospheric_pressure', 'humidity']
+        tags[tag["name"]]["trend"] = dict()
+        for field in fields:
+            endpoint_with_args = "{}?tag={}&field={}&interval={}".format(
+                    config.ruuvitag.trend_endpoint,
+                    tag["name"],
+                    field,
+                    config.ruuvitag.trend_interval)
+            trend_json = json.loads(invoke_endpoint(
+                endpoint_with_args,
+                trend_credentials.token))
+            # store trend data
+            tags[tag["name"]]["trend"][field] = trend_json["slope"]
 
     if len(tags) == 0:
         raise RuuvitagError("No latest Ruuvi tag information available.")
@@ -90,7 +143,7 @@ def ruuvitags(bot, trigger):
 @module.rate(user=60, channel=10, server=1)
 def ruuvitag(bot, trigger):
     """Displays last recorded Bluetooth beacon value
-    (if available) for a requested Ruuvi tag"""
+    (if available) for a requested Ruuvi tag with trend indicators"""
 
     if trigger.group(2) is not None and trigger.group(2) != "":
         tags = fetch_tags(bot.config)
