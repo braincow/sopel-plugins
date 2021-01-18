@@ -1,10 +1,13 @@
-from sopel import module, formatting
+from sopel import module, formatting, tools
 from sopel.config.types import StaticSection, ValidatedAttribute
 import json
 import requests
 import google.auth.transport.requests
 from google.oauth2.service_account import IDTokenCredentials
 import re
+
+
+LOGGER = tools.get_logger('ruuvitag')
 
 
 class RuuvitagError(Exception):
@@ -43,11 +46,12 @@ def configure(config):
 
 
 def invoke_endpoint(url, id_token):
+    LOGGER.debug("Querying: {}".format(url))
     headers = {'Authorization': 'Bearer ' + id_token}
 
     r = requests.get(url, headers=headers)
 
-    if r.status_code != 200:
+    if r.status_code not in [200, 204]:
         raise RuuvitagError(
                 ("Calling API endpoint failed with "
                     "HTTP status code: {}").format(r.status_code))
@@ -65,7 +69,7 @@ def format_trend_output(slope):
 
 
 def format_tag_output(name, data):
-    if data is None:
+    if data["latest"] is None:
         return "No condition data for '{}' available.".format(name)
 
     return ("Conditions at '{}' are: {} {}C, {} {}hPa, "
