@@ -16,6 +16,7 @@ class RuuvitagError(Exception):
 
 class RuuvitagSection(StaticSection):
     sa_json = ValidatedAttribute('sa_json', str)
+    tags_endpoint = ValidateAttribute('tags_endpoint', str)
     latest_endpoint = ValidatedAttribute('latest_endpoint', str)
     trend_endpoint = ValidatedAttribute('trend_endpoint', str)
     trend_interval = ValidatedAttribute('trend_interval', int)
@@ -31,6 +32,10 @@ def configure(config):
             'sa_json',
             ('Where is the GCP service account key file '
                 'located at (aka filename)?'))
+    config.ruuvitag.configure_setting(
+            'tags_endpoint',
+            ('What is the GCP cloud function endpoint '
+                'URL to call for list of known tags?'))
     config.ruuvitag.configure_setting(
             'latest_endpoint',
             ('What is the GCP cloud function endpoint '
@@ -95,7 +100,7 @@ def credentials_for_service(config, url):
     return credentials
 
 
-def fetch_tags(config):
+def fetch_tags_data(config, tag=None):
     latest_credentials = credentials_for_service(
             config,
             config.ruuvitag.latest_endpoint)
@@ -104,7 +109,9 @@ def fetch_tags(config):
             config.ruuvitag.trend_endpoint)
 
     response = invoke_endpoint(
-            config.ruuvitag.latest_endpoint,
+            "{}?tag=".format(
+                config.ruuvitag.latest_endpoint
+                tag),
             latest_credentials.token)
 
     tags = dict()
@@ -137,9 +144,19 @@ def fetch_tags(config):
 @module.rate(user=60, channel=10, server=1)
 def ruuvitags(bot, trigger):
     """Lists all known Ruuvi tags"""
-    tags = fetch_tags(bot.config)
-    names = tags.keys()
-    names.sort()
+    list_credentials = credentials_for_service(
+            bot.config,
+            bot.config.ruuvitags.tags_endpoint)
+
+    tags = json_loads(invoke_endpoint)
+        bot.config.ruuvitags.tags_endpoint,
+        list_credentials.token))
+
+    if len(tags_data) == 0:
+        bot.say("I dont know any tags :(")
+        return
+
+    names = [d['name'] for d in tags]
     bot.say("I know tags: '{}'".format("', '".join(names)))
 
 
@@ -150,7 +167,7 @@ def ruuvitag(bot, trigger):
     (if available) for a requested Ruuvi tag with trend indicators"""
 
     if trigger.group(2) is not None and trigger.group(2) != "":
-        tags = fetch_tags(bot.config)
+        tags = fetch_tags_data(bot.config)
 
         exp = re.compile(trigger.group(2))
         matched = list(filter(exp.match, list(tags.keys())))
